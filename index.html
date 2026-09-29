@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>1日スケジュール</title>
+  <meta name="description" content="その日の予定をパッと並べて整理する、端末内だけで完結するタイムスケジュール">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16181d" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+
+  <!-- iOS -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="1日スケジュール">
+  <meta name="format-detection" content="telephone=no">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app" class="app">
+    <!-- ヘッダー -->
+    <header class="app-header">
+      <button type="button" class="icon-btn" id="prev-day" aria-label="前日">&#9664;</button>
+      <h1 class="date-label" id="date-label" aria-live="polite"></h1>
+      <button type="button" class="icon-btn" id="next-day" aria-label="翌日">&#9654;</button>
+      <button type="button" class="today-btn" id="today-btn">今日</button>
+      <button type="button" class="icon-btn settings-btn" id="settings-btn" aria-label="設定">&#9881;&#xFE0E;</button>
+    </header>
+
+    <!-- 保存失敗時の警告 -->
+    <div class="storage-warning" id="storage-warning" role="alert" hidden>
+      データを保存できませんでした。ブラウザの設定(プライベートモード等)を確認してください。
+    </div>
+
+    <!-- タイムライン -->
+    <main class="timeline" id="timeline">
+      <div class="grid" id="grid">
+        <div class="hour-labels" id="hour-labels" aria-hidden="true"></div>
+        <div class="day" id="day">
+          <div class="now-line" id="now-line" hidden></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- シートの背景 -->
+  <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
+
+  <!-- 編集シート -->
+  <section class="sheet" id="editor-sheet" role="dialog" aria-modal="true" aria-labelledby="editor-heading" aria-hidden="true">
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2 id="editor-heading">予定</h2>
+      <button type="button" class="text-btn" id="editor-close">閉じる</button>
+    </div>
+    <div class="sheet-body">
+      <p class="sheet-note">入力は即時反映されます</p>
+
+      <label class="field">
+        <span class="field-label">タイトル</span>
+        <input type="text" id="edit-title" class="text-input" placeholder="タイトルなし" autocomplete="off" enterkeyhint="done">
+      </label>
+
+      <div class="field">
+        <span class="field-label">時刻</span>
+        <div class="time-rows">
+          <div class="time-row">
+            <span class="time-caption">開始</span>
+            <span class="time-date" id="start-date" hidden></span>
+            <input type="text" id="start-hour" class="num-input" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" aria-label="開始 時">
+            <span class="time-colon">:</span>
+            <input type="text" id="start-min" class="num-input" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" aria-label="開始 分">
+          </div>
+          <div class="time-row">
+            <span class="time-caption">終了</span>
+            <span class="time-date" id="end-date" hidden></span>
+            <input type="text" id="end-hour" class="num-input" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" aria-label="終了 時">
+            <span class="time-colon">:</span>
+            <input type="text" id="end-min" class="num-input" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" aria-label="終了 分">
+          </div>
+        </div>
+        <p class="time-hint" id="time-hint"></p>
+        <p class="field-error" id="time-error" role="alert" hidden></p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">色</span>
+        <div class="swatches" id="swatches" role="radiogroup" aria-label="色"></div>
+      </div>
+
+      <label class="field">
+        <span class="field-label">メモ</span>
+        <textarea id="edit-memo" class="text-input memo-input" rows="3"></textarea>
+      </label>
+
+      <button type="button" class="danger-btn" id="editor-delete">この予定を削除</button>
+    </div>
+  </section>
+
+  <!-- 設定シート -->
+  <section class="sheet" id="settings-sheet" role="dialog" aria-modal="true" aria-labelledby="settings-heading" aria-hidden="true">
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2 id="settings-heading">設定</h2>
+      <button type="button" class="text-btn" id="settings-close">閉じる</button>
+    </div>
+    <div class="sheet-body">
+      <div class="field">
+        <span class="field-label">1日の範囲</span>
+        <div class="segmented" id="range-segment" role="radiogroup" aria-label="1日の範囲">
+          <button type="button" role="radio" data-range="0-24">0:00〜24:00</button>
+          <button type="button" role="radio" data-range="4-28">4:00〜28:00</button>
+        </div>
+        <p class="note">4:00〜28:00 では、深夜 0:00〜4:00 を前日の 24:00〜28:00 として表示します。夜更かしの予定を前日の続きとして並べたいとき用です。</p>
+      </div>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

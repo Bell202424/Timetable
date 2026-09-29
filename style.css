@@ -1,0 +1,746 @@
+/* ===== 変数 ===== */
+:root {
+  /* 15分あたりの高さ(1時間 = 4倍)。ここを変えるとタイムラインの縦の縮尺が変わる */
+  --slot-height: 10px;
+  --hour-height: calc(var(--slot-height) * 4);
+  --label-width: 52px;
+  --grid-pad: 12px;
+  --event-gap-right: 12px;
+  --kb-offset: 0px;
+
+  --bg: #ffffff;
+  --surface: #f6f7f9;
+  --text: #1c1f24;
+  --text-muted: #6b7280;
+  --line-hour: #d5d9e0;
+  --line-quarter: #eef0f3;
+  --accent: #2563eb;
+  --danger: #dc2626;
+  --now: #ef4444;
+  --sat: #2563eb;
+  --sun: #dc2626;
+  --border: #e3e6eb;
+  --backdrop: rgba(15, 18, 24, 0.35);
+  --warning-bg: #fff4d6;
+  --warning-text: #7a5300;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181d;
+    --surface: #20232a;
+    --text: #e8eaee;
+    --text-muted: #9aa1ad;
+    --line-hour: #343945;
+    --line-quarter: #22262e;
+    --accent: #60a5fa;
+    --danger: #f87171;
+    --now: #f87171;
+    --sat: #60a5fa;
+    --sun: #f87171;
+    --border: #2e323b;
+    --backdrop: rgba(0, 0, 0, 0.5);
+    --warning-bg: #3a2f10;
+    --warning-text: #f6d77a;
+  }
+}
+
+/* ===== ベース ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", sans-serif;
+  font-size: 15px;
+  -webkit-text-size-adjust: 100%;
+  /* ダブルタップズームを無効にする */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ===== レイアウト ===== */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  height: 100dvh;
+  max-width: 600px;
+  margin: 0 auto;
+  background: var(--bg);
+}
+
+@media (min-width: 640px) {
+  .app {
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+}
+
+/* ===== ヘッダー ===== */
+.app-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left));
+  padding-top: calc(8px + env(safe-area-inset-top));
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.icon-btn {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 16px;
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+}
+
+.icon-btn:hover,
+.today-btn:hover,
+.text-btn:hover {
+  background: var(--surface);
+}
+
+.icon-btn:active,
+.today-btn:active {
+  background: var(--line-hour);
+}
+
+.settings-btn {
+  font-size: 22px;
+  margin-left: auto;
+}
+
+.date-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-label .wd-sat {
+  color: var(--sat);
+}
+
+.date-label .wd-sun {
+  color: var(--sun);
+}
+
+.today-btn {
+  flex: none;
+  height: 34px;
+  padding: 0 12px;
+  margin-left: 4px;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.today-btn.is-today {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (max-width: 359px) {
+  .icon-btn {
+    width: 34px;
+  }
+
+  .date-label {
+    font-size: 16px;
+  }
+
+  .today-btn {
+    padding: 0 8px;
+  }
+}
+
+.storage-warning {
+  flex: none;
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  text-align: center;
+}
+
+/* ===== タイムライン ===== */
+.timeline {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding-bottom: env(safe-area-inset-bottom);
+  /* 長押しでテキスト選択・コールアウトを出さない */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.grid {
+  position: relative;
+  padding: var(--grid-pad) max(8px, env(safe-area-inset-right)) var(--grid-pad) 0;
+  padding-left: env(safe-area-inset-left);
+}
+
+.hour-labels {
+  position: absolute;
+  top: var(--grid-pad);
+  left: env(safe-area-inset-left);
+  width: var(--label-width);
+  bottom: var(--grid-pad);
+  pointer-events: none;
+}
+
+.hour-label {
+  position: absolute;
+  right: 8px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 予定を並べる領域。1時間ごとの実線と15分ごとの薄い線を背景で描く */
+.day {
+  position: relative;
+  margin-left: var(--label-width);
+  border-bottom: 1px solid var(--line-hour);
+  background-image:
+    linear-gradient(to bottom, var(--line-hour) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line-quarter) 1px, transparent 1px);
+  background-size: 100% var(--hour-height), 100% var(--slot-height);
+  cursor: cell;
+}
+
+/* ===== 現在時刻の線 ===== */
+.now-line {
+  position: absolute;
+  left: -6px;
+  right: 0;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--now);
+  z-index: 30;
+  pointer-events: none;
+}
+
+.now-line::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--now);
+}
+
+/* ===== 予定ブロック ===== */
+.event {
+  --ev-color: #2563eb;
+  position: absolute;
+  min-height: 14px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--ev-color);
+  color: #fff;
+  overflow: visible;
+  cursor: grab;
+  touch-action: pan-y;
+  z-index: 10;
+  box-shadow: 0 0 0 1px var(--bg);
+  line-height: 1.25;
+}
+
+.event:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+/* 文字はブロック内に収め、つまみ・ギザギザはブロック外にはみ出せるようにする */
+.event-body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.event-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-all;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--title-lines, 1);
+}
+
+.event-title.is-empty {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.event-time {
+  font-size: 11px;
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 低いブロック: タイトルのみ1行 */
+.event.compact {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.event.compact .event-body {
+  flex-direction: row;
+  align-items: center;
+}
+
+.event.compact .event-title {
+  display: block;
+  white-space: nowrap;
+}
+
+.event.compact .event-time {
+  display: none;
+}
+
+/* 縦幅に余裕があるときだけ表示するメモ(行数は JS で決める) */
+.event-memo {
+  flex: 1 1 0;
+  min-height: 0;
+  margin-top: 1px;
+  font-size: 11px;
+  line-height: 14px;
+  opacity: 0.85;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--memo-lines, 1);
+}
+
+.event.compact .event-memo {
+  display: none;
+}
+
+.event.dragging {
+  opacity: 0.6;
+  z-index: 40;
+  cursor: grabbing;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+/* ドラッグ中は時刻を必ず見せる */
+.event.dragging.compact .event-time {
+  display: block;
+  margin-left: 6px;
+  flex: none;
+}
+
+/* 時刻変更用のつまみ(上端 = 開始、下端 = 終了)。ブロックの内側と外側に少しずつかかる */
+.resize-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 10px;
+  cursor: ns-resize;
+  touch-action: none;
+  z-index: 2;
+}
+
+.resize-handle.handle-top {
+  top: -4px;
+}
+
+.resize-handle.handle-bottom {
+  bottom: -4px;
+}
+
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 22px;
+  height: 3px;
+  margin-left: -11px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.resize-handle.handle-top::after {
+  top: 5px;
+}
+
+.resize-handle.handle-bottom::after {
+  bottom: 5px;
+}
+
+/* 低いブロックは上端のつまみを出さず、移動できる場所を残す */
+.event.no-top-handle .handle-top {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .resize-handle {
+    height: 14px;
+  }
+
+  .resize-handle.handle-top {
+    top: -6px;
+  }
+
+  .resize-handle.handle-bottom {
+    bottom: -6px;
+  }
+
+  .resize-handle.handle-top::after {
+    top: 7px;
+  }
+
+  .resize-handle.handle-bottom::after {
+    bottom: 7px;
+  }
+}
+
+/* 範囲の境目をまたぐ予定: はみ出している側をギザギザにする */
+.event.clip-top {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.event.clip-bottom {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.event.clip-top::before,
+.event.clip-bottom::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: var(--ev-color);
+  -webkit-mask-size: 10px 6px;
+  mask-size: 10px 6px;
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+  pointer-events: none;
+}
+
+.event.clip-top::before {
+  top: -5px;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 6L5 0L10 6Z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 6L5 0L10 6Z'/%3E%3C/svg%3E");
+}
+
+.event.clip-bottom::after {
+  bottom: -5px;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0L5 6L10 0Z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0L5 6L10 0Z'/%3E%3C/svg%3E");
+}
+
+/* ===== シート ===== */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--backdrop);
+  z-index: 100;
+  animation: fade-in 0.18s ease-out;
+}
+
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--kb-offset);
+  max-width: 600px;
+  max-height: 88vh;
+  max-height: min(88dvh, calc(100dvh - var(--kb-offset) - 24px));
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.18);
+  z-index: 110;
+  transform: translateY(110%);
+  visibility: hidden;
+  /* 閉じるアニメーション中にタップを横取りしない */
+  pointer-events: none;
+  transition: transform 0.22s ease-out, visibility 0s linear 0.22s;
+}
+
+.sheet.open {
+  transform: translateY(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition: transform 0.22s ease-out, visibility 0s;
+}
+
+.sheet-grip {
+  flex: none;
+  width: 36px;
+  height: 4px;
+  margin: 8px auto 0;
+  border-radius: 2px;
+  background: var(--line-hour);
+}
+
+.sheet-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 16px 4px 20px;
+}
+
+.sheet-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.text-btn {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sheet-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 20px calc(20px + env(safe-area-inset-bottom));
+}
+
+.field {
+  display: block;
+  margin-bottom: 18px;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* iOSでフォーカス時に拡大されないよう16px以上にする */
+.text-input,
+.num-input {
+  font: inherit;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+}
+
+.text-input {
+  width: 100%;
+  padding: 10px 12px;
+}
+
+.text-input:focus,
+.num-input:focus {
+  border-color: var(--accent);
+}
+
+.memo-input {
+  resize: vertical;
+  min-height: 72px;
+  line-height: 1.5;
+}
+
+.sheet-note {
+  margin: 0 0 14px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.time-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.time-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-caption {
+  width: 36px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.time-date {
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.num-input {
+  width: 56px;
+  padding: 8px 4px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.num-input.invalid {
+  border-color: var(--danger);
+}
+
+.time-colon {
+  font-weight: 700;
+}
+
+.time-hint,
+.note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.field-error {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--sw);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.06);
+}
+
+.swatch[aria-checked="true"] {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--sw);
+}
+
+.danger-btn {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.danger-btn:hover {
+  background: var(--surface);
+}
+
+.segmented {
+  display: flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.segmented button {
+  flex: 1;
+  min-height: 40px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.segmented button[aria-checked="true"] {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheet.open {
+    transition: none;
+  }
+
+  .sheet-backdrop {
+    animation: none;
+  }
+}
